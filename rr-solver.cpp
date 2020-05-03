@@ -71,7 +71,7 @@ struct Cell {
 // 0 is the top-leftmost cell.
 // 255 is the bottom-rightmost cell.
 
-int8_t active_robot_cell(Position position) {
+int active_robot_cell(Position position) {
     return position & 0xff;
 }
 
@@ -80,7 +80,6 @@ template<typename T, typename U>
 void move_stack_to_vector(std::stack<std::pair<T,U>>* stack, std::vector<T>* vector) {
     while (!stack->empty()) {
         T top_elem = std::get<0>(stack->top());
-        std::cout << top_elem << std::endl;
         vector->push_back(top_elem);
         stack->pop();
     }
@@ -248,12 +247,12 @@ bool search_with_depth(Cell board[256], const Position start, const int precompu
         const Position curr_pos = std::get<0>(current);
         const int moves_left = std::get<1>(current);
 
-        print_position(curr_pos);
-        std::cout << std::endl;
+        // print_position(curr_pos);
+        // std::cout << std::endl;
 
         if (moves_left < precomputed_map[active_robot_cell(curr_pos)]) {
             // We can't get to the goal fast enough. This Position is a dead end.
-            std::cout << "Ran out of moves" << std::endl;
+            // std::cout << "Ran out of moves" << std::endl;
             continue;
         }
 
@@ -268,17 +267,21 @@ bool search_with_depth(Cell board[256], const Position start, const int precompu
 
         for (int robot = 0; robot < 4; robot++) {
             for (int direction = 0; direction < 4; direction++) {
-                std::cout << "Making move for robot " << robot << " in direction " << direction << ". ";
+                // std::cout << "Making move for robot " << robot << " in direction " << direction << ". ";
                 const Position new_pos = make_move(board, curr_pos, robot, direction);
-                std::cout << "New pos ";
-                print_position(new_pos);
-                std::cout << std::endl;
+                // std::cout << "New pos ";
+                // print_position(new_pos);
+                // std::cout << ". ";
 
                 if (new_pos == curr_pos) {
+                    // std::cout << "Same as old pos." << std::endl;
                     continue;
                 }
 
                 const Position sorted_pos = sorted_position(new_pos);
+                // std::cout << "Sorted pos ";
+                // print_position(sorted_pos);
+                // std::cout << std::endl;
 
                 auto already_found = moves_required->find(sorted_pos);
                 if (already_found == moves_required->end() or moves_used + 1 < already_found->second) {
@@ -286,8 +289,7 @@ bool search_with_depth(Cell board[256], const Position start, const int precompu
                     stack.push(std::make_pair(new_pos, moves_left - 1));
 
                     // Victory check.
-                    if (robot == 0 && active_robot_cell(curr_pos) == goal) {
-                        std::cout << "here\n";
+                    if (robot == 3 && active_robot_cell(new_pos) == goal) {
                         move_stack_to_vector(&stack, result);
                         return true;
                     }
@@ -306,8 +308,8 @@ bool search(Cell board[256], const Position start, const int precomputed_map[256
     // Map Positions to the lowest number of moves required to reach them from the start Position.
     std::unordered_map<Position, int> moves_required;
 
-    int depth = 0;
-    while (depth < 24) {
+    int depth = 22;
+    while (depth < 23) {
         std::cout << "Searching with depth = " << depth << std::endl;
         if (search_with_depth(board, start, precomputed_map, goal, depth, &moves_required, result)) {
             std::cout << "Found optimal path with depth = " << depth << std::endl;
@@ -538,7 +540,7 @@ int main() {
     setup_board(board);
 
     int precomputed_map[256] = {0};
-    const int goal = 13;
+    const int goal = 201;
 
     precompute(board, goal, precomputed_map);
     std::cout << "Precomputed map:" << std::endl;
