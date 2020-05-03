@@ -134,26 +134,53 @@ void precompute(const Cell board[256], int target_cell, int precomputed_map[256]
     }
 }
 
+void add_wall(Cell board[256], int cell1, int cell2) {
+    if (cell1 == cell2) {
+        std::cerr << "Invalid wall: cell1 = cell2 = " << cell1 << std::endl;
+        return;
+    }
+
+    // Ensure cell1 < cell2
+    if (cell1 > cell2) {
+        std::swap(cell1, cell2);
+    }
+
+    if (same_row(cell1, cell2) and cell2 - cell1 == 1) {
+        // Vertical wall case
+        board[cell1].cell |= 0b0100;
+        board[cell2].cell |= 0b0010;
+    } else if (cell2 - cell1 == 16) {
+        // Horizontal wall case
+        board[cell1].cell |= 0b0001;
+        board[cell2].cell |= 0b1000;
+    } else {
+        // No common edge
+        std::cerr << "This cell pair does not share an edge: (cell1, cell2) == (" << cell1 << ", " << cell2 << ")";
+        return;
+    }
+}
+
 void add_central_walls(Cell board[256]) {
-    // N, W
-    board[119].cell |= 0b1000;
-    board[119].cell |= 0b0010;
+    // cell 119 has walls at N, W
+    add_wall(board, 119, 118);
+    add_wall(board, 119, 103);
 
-    // N, E
-    board[120].cell |= 0b1000;
-    board[120].cell |= 0b0100;
+    // cell 120 has walls at N, E
+    add_wall(board, 120, 121);
+    add_wall(board, 120, 104);
 
-    // S, W
-    board[135].cell |= 0b0001;
-    board[135].cell |= 0b0010;
+    // cell 135 has walls at S, W
+    add_wall(board, 135, 134);
+    add_wall(board, 135, 151);
 
-    // S, E
-    board[136].cell |= 0b0001;
-    board[136].cell |= 0b0100;
+    // cell 136 has walls at S, E
+    add_wall(board, 136, 137);
+    add_wall(board, 136, 152);
 }
 
 void setup_board(Cell board[256]) {
     add_central_walls(board);
+    add_wall(board, 3, 4);
 }
 
 int main() {
