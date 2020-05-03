@@ -31,11 +31,11 @@ struct Cell {
         return cell & 0b1000;
     }
 
-    bool has_w_wall() const {
+    bool has_e_wall() const {
         return cell & 0b100;
     }
 
-    bool has_e_wall() const {
+    bool has_w_wall() const {
         return cell & 0b10;
     }
 
@@ -134,10 +134,34 @@ void precompute(const Cell board[256], int target_cell, int precomputed_map[256]
     }
 }
 
+void setup_board(Cell board[256]) {
+    add_central_walls(board);
+}
+
+void add_central_walls(Cell board[256]) {
+    // N, W
+    board[119].cell |= 0b1000;
+    board[119].cell |= 0b0010;
+
+    // N, E
+    board[120].cell |= 0b1000;
+    board[120].cell |= 0b0100;
+
+    // S, W
+    board[135].cell |= 0b0001;
+    board[135].cell |= 0b0010;
+
+    // S, E
+    board[136].cell |= 0b0001;
+    board[136].cell |= 0b0100;
+}
+
 int main() {
     std::cout << "Ricochet Robot solver" << std::endl;
 
     Cell board[256];
+    setup_board(board);
+
     int precomputed_map[256] = {0};
 
     std::cout << "Precomputed map initialized to:" << std::endl;
