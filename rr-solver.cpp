@@ -86,6 +86,7 @@ void move_stack_to_vector(std::stack<std::pair<T,U>>* stack, std::vector<T>* vec
     std::reverse(vector->begin(), vector->end());
 }
 
+// Ascending sort.
 void sort(int* a, int* b, int* c) {
     if (*a > *b) {
         std::swap(*a, *b);
@@ -110,6 +111,8 @@ Position create_position(int a, int b, int c, int d) {
 }
 
 // Non-destructively sort a Position and return a new one.
+// Sorting a Position means sorting the first 3 (from the left) octets.
+// These correspond to the non-active robots.
 Position sorted_position(const Position position) {
     int a = (position &0xff000000) >> 24;
     int b = (position &0x00ff0000) >> 16;
@@ -131,13 +134,8 @@ Position make_move_north(Cell board[256], const Position curr_pos, const int rob
     const int shift = 8 * (3 - robot_to_move);
     const int robot_cell = (curr_pos & (0xff << shift)) >> shift;
 
-    // Can't go further from where we are.
-    if (board[robot_cell].has_n_wall() or board[robot_cell - 16].has_robot()) {
-        return curr_pos;
-    }
-
-    // Go as far as we can.
-    int neighbour = robot_cell - 16;
+    // Go as far as we can starting from the current cell.
+    int neighbour = robot_cell;
     while (true) {
         if (board[neighbour].has_n_wall() or board[neighbour - 16].has_robot()) {
             break;
@@ -151,13 +149,8 @@ Position make_move_east(Cell board[256], const Position curr_pos, const int robo
     const int shift = 8 * (3 - robot_to_move);
     const int robot_cell = (curr_pos & (0xff << shift)) >> shift;
 
-    // Can't go further from where we are.
-    if (board[robot_cell].has_e_wall() or board[robot_cell + 1].has_robot()) {
-        return curr_pos;
-    }
-
-    // Go as far as we can.
-    int neighbour = robot_cell + 1;
+    // Go as far as we can starting from the current cell.
+    int neighbour = robot_cell;
     while (true) {
         if (board[neighbour].has_e_wall() or board[neighbour + 1].has_robot()) {
             break;
@@ -171,13 +164,8 @@ Position make_move_west(Cell board[256], const Position curr_pos, const int robo
     const int shift = 8 * (3 - robot_to_move);
     const int robot_cell = (curr_pos & (0xff << shift)) >> shift;
 
-    // Can't go further from where we are.
-    if (board[robot_cell].has_w_wall() or board[robot_cell - 1].has_robot()) {
-        return curr_pos;
-    }
-
-    // Go as far as we can.
-    int neighbour = robot_cell - 1;
+    // Go as far as we can starting from the current cell.
+    int neighbour = robot_cell;
     while (true) {
         if (board[neighbour].has_w_wall() or board[neighbour - 1].has_robot()) {
             break;
@@ -192,13 +180,8 @@ Position make_move_south(Cell board[256], const Position curr_pos, const int rob
     const int shift = 8 * (3 - robot_to_move);
     int robot_cell = (curr_pos & (0xff << shift)) >> shift;
 
-    // Can't go further from where we are.
-    if (board[robot_cell].has_s_wall() or board[robot_cell + 16].has_robot()) {
-        return curr_pos;
-    }
-
-    // Go as far as we can.
-    int neighbour = robot_cell + 16;
+    // Go as far as we can starting from the current cell.
+    int neighbour = robot_cell;
     while (true) {
         if (board[neighbour].has_s_wall() or board[neighbour + 16].has_robot()) {
             break;
@@ -224,22 +207,25 @@ Position make_move(Cell board[256], const Position curr_pos, const int robot_to_
 // Next 8 bits of curr_pos = next non-active robot.
 // Final 8 bits of curr_pos = active robot.
 void populate_robot_bits(Cell board[256], const Position curr_pos) {
+    const int robot_bit_mask = 0b10000;
+
     // First, zero out every robot bit in the board.
     for (int i = 0; i < 256; i++) {
-        board[i].cell &= ~(0b10000);
+        board[i].cell &= ~robot_bit_mask;
     }
 
     // Then, populate the robot bits for each robot-occupied cell.
-    board[(curr_pos & 0xff000000) >> 24].cell |= 0b10000;
-    board[(curr_pos & 0x00ff0000) >> 16].cell |= 0b10000;
-    board[(curr_pos & 0x0000ff00) >> 8].cell |= 0b10000;
-    board[curr_pos & 0x000000ff].cell |= 0b10000;
+    board[(curr_pos & 0xff000000) >> 24].cell |= robot_bit_mask;
+    board[(curr_pos & 0x00ff0000) >> 16].cell |= robot_bit_mask;
+    board[(curr_pos & 0x0000ff00) >> 8].cell |= robot_bit_mask;
+    board[curr_pos & 0x000000ff].cell |= robot_bit_mask;
 }
 
-bool search_with_depth(Cell board[256], const Position start, const int precomputed_map[256], const int goal, const int depth, std::unordered_map<Position, int>* moves_required, std::vector<Position>* result) {
+bool search_with_depth(Cell board[256], const Position start_pos, const int precomputed_map[256], const int goal, const int depth, std::unordered_map<Position, int>* moves_required, std::vector<Position>* result) {
     // Stack consists of (Position, moves_left)
     std::stack<std::pair<Position, int>> stack;
-    stack.push(std::make_pair(start, depth));
+    stack.push(std::make_pair(start_pos, depth));
+
     while (!stack.empty()) {
         std::pair<Position, int> current = stack.top();
         stack.pop();
@@ -260,6 +246,7 @@ bool search_with_depth(Cell board[256], const Position start, const int precompu
 
         // We didn't reach the goal, and we're out of moves.
         if (moves_left == 0) {
+            std::cerr << "Error: Shouldn't be reached" << std::endl;
             break;
         }
 
@@ -467,35 +454,35 @@ void add_wall_south(Cell board[256], int cell) {
     add_wall(board, cell, cell+16);
 }
 
-void add_northern_walls(Cell board[256]) {
+void add_northern_edge_walls(Cell board[256]) {
     for (int i = 0; i < 16; i++) {
         add_wall_north(board, i);
     }
 }
 
-void add_eastern_walls(Cell board[256]) {
+void add_eastern_edge_walls(Cell board[256]) {
     for (int i = 0; i < 16; i++) {
         add_wall_east(board, i*16 + 15);
     }
 }
 
-void add_western_walls(Cell board[256]) {
+void add_western_edge_walls(Cell board[256]) {
     for (int i = 0; i < 16; i++) {
         add_wall_west(board, i*16);
     }
 }
 
-void add_southern_walls(Cell board[256]) {
+void add_southern_edge_walls(Cell board[256]) {
     for (int i = 0; i < 16; i++) {
         add_wall_south(board, 15*16 + i);
     }
 }
 
 void add_border_walls(Cell board[256]) {
-    add_northern_walls(board);
-    add_eastern_walls(board);
-    add_western_walls(board);
-    add_southern_walls(board);
+    add_northern_edge_walls(board);
+    add_eastern_edge_walls(board);
+    add_western_edge_walls(board);
+    add_southern_edge_walls(board);
 }
 
 // // Wall configurations: NW, NE, SW, SE
