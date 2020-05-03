@@ -134,10 +134,6 @@ void precompute(const Cell board[256], int target_cell, int precomputed_map[256]
     }
 }
 
-void setup_board(Cell board[256]) {
-    add_central_walls(board);
-}
-
 void add_central_walls(Cell board[256]) {
     // N, W
     board[119].cell |= 0b1000;
@@ -154,6 +150,10 @@ void add_central_walls(Cell board[256]) {
     // S, E
     board[136].cell |= 0b0001;
     board[136].cell |= 0b0100;
+}
+
+void setup_board(Cell board[256]) {
+    add_central_walls(board);
 }
 
 int main() {
