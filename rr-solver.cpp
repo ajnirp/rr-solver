@@ -22,6 +22,22 @@ void print_grid(T array[256]) {
     std::cout << std::endl;
 }
 
+void print_position(const Position position) {
+    int a = (position & 0xff000000) >> 24;
+    int b = (position & 0x00ff0000) >> 16;
+    int c = (position & 0x0000ff00) >> 8;
+    int d = (position & 0x000000ff);
+    std::cout << "(" << a << ", " << b << ", " << c << ", " << d << ")";
+}
+
+void print_path(const std::vector<Position>& path) {
+    for (auto position : path) {
+        print_position(position);
+        std::cout << " ";
+    }
+    std::cout << std::endl;
+}
+
 // A single cell in the board. Uses 8 bits. 5 are actually used.
 // One bit for each wall direction, one bit for if a robot is present.
 // Walls are stored twice, since a wall touches two cells.
@@ -31,23 +47,23 @@ struct Cell {
     Cell() : cell(0) {}
 
     bool has_robot() const {
-        return 1 == (cell & 0b10000) >> 4;
+        return cell & 0b10000;
     }
 
     bool has_n_wall() const {
-        return 1 == (cell & 0b1000) >> 3;
+        return cell & 0b1000;
     }
 
     bool has_e_wall() const {
-        return 1 == (cell & 0b100) >> 2;
+        return cell & 0b100;
     }
 
     bool has_w_wall() const {
-        return 1 == (cell & 0b10) >> 1;
+        return cell & 0b10;
     }
 
     bool has_s_wall() const {
-        return 1 == cell & 0b1;
+        return cell & 0b1;
     }
 };
 
@@ -64,6 +80,7 @@ template<typename T, typename U>
 void move_stack_to_vector(std::stack<std::pair<T,U>>* stack, std::vector<T>* vector) {
     while (!stack->empty()) {
         T top_elem = std::get<0>(stack->top());
+        std::cout << top_elem << std::endl;
         vector->push_back(top_elem);
         stack->pop();
     }
@@ -102,22 +119,21 @@ Position sorted_position(const Position position) {
     return (a << 24) | (b << 16) | (c << 8) | (position & 0xff);
 }
 
-// A robot (indicated by robot) is moved to new_cell. Compute and return the new position.
-// For the robot parameter: 1 is leftmost, 4 is rightmost (active). 1, 2 and 3 are non-active robots.
+// Robot number `robot` is moved to `new_cell`. Compute and return the new position.
 Position new_position(const Position curr_pos, const int robot, const int new_cell) {
-    int shift = 8 * (4 - robot);
-    int mask = ~(0xff << shift);
+    int shift = 8 * (3 - robot);
+    int32_t mask = ~(0xff << shift);
     // Note: we grab the rightmost 8 bits of the new_cell just to be safe.
-    return (curr_pos & mask) | ((new_cell & 0xff) << shift);
+    return (curr_pos & mask) | ((int32_t(new_cell) & 0xff) << shift);
 }
 
-// In the robot_to_move parameter, 1 is leftmost, 4 is rightmost (active). 1, 2 and 3 are non-active robots.
+// In the robot_to_move parameter, 3 is the active robot (rightmost). 0, 1 and 2 (leftmost) are inactive robots.
 Position make_move_north(Cell board[256], const Position curr_pos, const int robot_to_move) {
-    const int shift = 8 * (4 - robot_to_move);
+    const int shift = 8 * (3 - robot_to_move);
     const int robot_cell = (curr_pos & (0xff << shift)) >> shift;
 
     // Can't go further from where we are.
-    if (board[robot_cell].has_n_wall()) {
+    if (board[robot_cell].has_n_wall() or board[robot_cell - 16].has_robot()) {
         return curr_pos;
     }
 
@@ -133,11 +149,11 @@ Position make_move_north(Cell board[256], const Position curr_pos, const int rob
 }
 
 Position make_move_east(Cell board[256], const Position curr_pos, const int robot_to_move) {
-    const int shift = 8 * (4 - robot_to_move);
+    const int shift = 8 * (3 - robot_to_move);
     const int robot_cell = (curr_pos & (0xff << shift)) >> shift;
 
     // Can't go further from where we are.
-    if (board[robot_cell].has_e_wall()) {
+    if (board[robot_cell].has_e_wall() or board[robot_cell + 1].has_robot()) {
         return curr_pos;
     }
 
@@ -153,11 +169,11 @@ Position make_move_east(Cell board[256], const Position curr_pos, const int robo
 }
 
 Position make_move_west(Cell board[256], const Position curr_pos, const int robot_to_move) {
-    const int shift = 8 * (4 - robot_to_move);
+    const int shift = 8 * (3 - robot_to_move);
     const int robot_cell = (curr_pos & (0xff << shift)) >> shift;
 
     // Can't go further from where we are.
-    if (board[robot_cell].has_w_wall()) {
+    if (board[robot_cell].has_w_wall() or board[robot_cell - 1].has_robot()) {
         return curr_pos;
     }
 
@@ -174,11 +190,11 @@ Position make_move_west(Cell board[256], const Position curr_pos, const int robo
 }
 
 Position make_move_south(Cell board[256], const Position curr_pos, const int robot_to_move) {
-    int shift = 8 * (4 - robot_to_move);
+    const int shift = 8 * (3 - robot_to_move);
     int robot_cell = (curr_pos & (0xff << shift)) >> shift;
 
     // Can't go further from where we are.
-    if (board[robot_cell].has_s_wall()) {
+    if (board[robot_cell].has_s_wall() or board[robot_cell + 16].has_robot()) {
         return curr_pos;
     }
 
@@ -222,10 +238,6 @@ void populate_robot_bits(Cell board[256], const Position curr_pos) {
 }
 
 bool search_with_depth(Cell board[256], const Position start, const int precomputed_map[256], const int goal, const int depth, std::unordered_map<Position, int>* moves_required, std::vector<Position>* result) {
-    if (depth == 0 and active_robot_cell(start) == goal) {
-        return true;
-    }
-
     // Stack consists of (Position, moves_left)
     std::stack<std::pair<Position, int>> stack;
     stack.push(std::make_pair(start, depth));
@@ -235,6 +247,9 @@ bool search_with_depth(Cell board[256], const Position start, const int precompu
 
         const Position curr_pos = std::get<0>(current);
         const int moves_left = std::get<1>(current);
+
+        print_position(curr_pos);
+        std::cout << std::endl;
 
         if (moves_left < precomputed_map[active_robot_cell(curr_pos)]) {
             // We can't get to the goal fast enough. This Position is a dead end.
@@ -253,8 +268,11 @@ bool search_with_depth(Cell board[256], const Position start, const int precompu
 
         for (int robot = 0; robot < 4; robot++) {
             for (int direction = 0; direction < 4; direction++) {
-                std::cout << "Making move for robot " << robot << " in direction " << direction << std::endl;
+                std::cout << "Making move for robot " << robot << " in direction " << direction << ". ";
                 const Position new_pos = make_move(board, curr_pos, robot, direction);
+                std::cout << "New pos ";
+                print_position(new_pos);
+                std::cout << std::endl;
 
                 if (new_pos == curr_pos) {
                     continue;
@@ -267,13 +285,11 @@ bool search_with_depth(Cell board[256], const Position start, const int precompu
                     (*moves_required)[sorted_pos] = moves_used + 1;
                     stack.push(std::make_pair(new_pos, moves_left - 1));
 
-                    // Do a victory check. Why? Because the final move to the goal will always be the active robot's.
-                    // So, we can do our victory check here itself rather than after popping the stack - this way it's sooner.
-                    if (robot == 4) {
-                        if (active_robot_cell(new_pos) == goal) {
-                            move_stack_to_vector(&stack, result);
-                            return true;
-                        }
+                    // Victory check.
+                    if (robot == 0 && active_robot_cell(curr_pos) == goal) {
+                        std::cout << "here\n";
+                        move_stack_to_vector(&stack, result);
+                        return true;
                     }
                 }
             }
@@ -291,8 +307,7 @@ bool search(Cell board[256], const Position start, const int precomputed_map[256
     std::unordered_map<Position, int> moves_required;
 
     int depth = 0;
-    std::vector<Position> path;
-    while (depth < 40) {
+    while (depth < 24) {
         std::cout << "Searching with depth = " << depth << std::endl;
         if (search_with_depth(board, start, precomputed_map, goal, depth, &moves_required, result)) {
             std::cout << "Found optimal path with depth = " << depth << std::endl;
@@ -481,16 +496,36 @@ void add_border_walls(Cell board[256]) {
     add_southern_walls(board);
 }
 
+// // Wall configurations: NW, NE, SW, SE
+// void add_nw_wall_pair(Cell board[256], int cell) {
+//     add_wall_north(board, cell);
+//     add_wall_west(board, cell);
+// }
+// void add_ne_wall_pair(Cell board[256], int cell) {
+//     add_wall_north(board, cell);
+//     add_wall_east(board, cell);
+// }
+// void add_sw_wall_pair(Cell board[256], int cell) {
+//     add_wall_south(board, cell);
+//     add_wall_west(board, cell);
+// }
+// void add_se_wall_pair(Cell board[256], int cell) {
+//     add_wall_south(board, cell);
+//     add_wall_east(board, cell);
+// }
+
 void setup_board(Cell board[256]) {
     add_border_walls(board);
     add_central_walls(board);
 
-    int list1[20] = {3, 9, 21, 29, 42, 49, 68, 82, 109, 122, 147, 157, 170, 177, 198, 201, 225, 237, 245, 250};
+    // std::vector<int> nw = {4, 10, 30, 69, }
+
+    int list1[20] = {3, 9, 21, 29, 42, 49, 68, 82, 109, 122, 147, 157, 170, 176, 198, 201, 225, 237, 245, 250};
     for (int i = 0; i < 20; i++) {
         add_wall_east(board, list1[i]);
     }
 
-    int list2[20] = {15, 22, 33, 43, 53, 63, 82, 96, 106, 109, 131, 142, 171, 175, 177, 185, 198, 208, 210, 237};
+    int list2[20] = {14, 22, 33, 43, 53, 63, 82, 96, 106, 109, 131, 142, 171, 175, 177, 185, 198, 208, 210, 237};
     for (int i = 0; i < 20; i++) {
         add_wall_south(board, list2[i]);
     }
@@ -503,7 +538,7 @@ int main() {
     setup_board(board);
 
     int precomputed_map[256] = {0};
-    const int goal = 201;
+    const int goal = 13;
 
     precompute(board, goal, precomputed_map);
     std::cout << "Precomputed map:" << std::endl;
@@ -514,7 +549,8 @@ int main() {
     std::vector<Position> result;
 
     if (search(board, start, precomputed_map, goal, &result)) {
-        std::cout << "Found a path" << std::endl;
+        std::cout << "Found a path." << std::endl;
+        print_path(result);
         return 0;
     } else {
         std::cout << "Failed to find a path" << std::endl;
