@@ -178,9 +178,50 @@ void add_central_walls(Cell board[256]) {
     add_wall(board, 136, 152);
 }
 
+void add_wall_north(Cell board[256], int cell) {
+    if (cell < 16) {
+        std::cerr << "No need to add north wall for cell at the north edge of the board. Cell = " << cell << std::endl;
+        return;
+    }
+    add_wall(board, cell, cell-16);
+}
+
+void add_wall_east(Cell board[256], int cell) {
+    if (cell % 16 == 15) {
+        std::cerr << "No need to add east wall for cell at the east edge of the board. Cell = " << cell << std::endl;
+        return;
+    }
+    add_wall(board, cell, cell+1);
+}
+
+void add_wall_west(Cell board[256], int cell) {
+    if (cell % 16 == 0) {
+        std::cerr << "No need to add west wall for cell at the west edge of the board. Cell = " << cell << std::endl;
+        return;
+    }
+    add_wall(board, cell, cell-1);
+}
+
+void add_wall_south(Cell board[256], int cell) {
+    if (cell > 239) {
+        std::cerr << "No need to add south wall for cell at the south edge of the board. Cell = " << cell << std::endl;
+        return;
+    }
+    add_wall(board, cell, cell+16);
+}
+
 void setup_board(Cell board[256]) {
     add_central_walls(board);
-    add_wall(board, 3, 4);
+
+    int list1[20] = {3, 9, 21, 29, 42, 49, 68, 82, 109, 122, 147, 157, 170, 177, 198, 201, 225, 237, 245, 250};
+    for (int i = 0; i < 20; i++) {
+        add_wall_east(board, list1[i]);
+    }
+
+    int list2[20] = {15, 22, 33, 43, 53, 63, 82, 96, 106, 109, 131, 142, 171, 175, 177, 185, 198, 208, 210, 237};
+    for (int i = 0; i < 20; i++) {
+        add_wall_south(board, list2[i]);
+    }
 }
 
 int main() {
@@ -191,12 +232,8 @@ int main() {
 
     int precomputed_map[256] = {0};
 
-    std::cout << "Precomputed map initialized to:" << std::endl;
-    print_array(precomputed_map);
-    std::cout << std::endl;
-
-    precompute(board, 0, precomputed_map);
-    std::cout << "Precomputed map is now:" << std::endl;
+    precompute(board, 201, precomputed_map);
+    std::cout << "Precomputed map:" << std::endl;
     print_array(precomputed_map);
 
     return 0;
