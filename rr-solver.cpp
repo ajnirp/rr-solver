@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <iostream>
 #include <queue>
+#include <set>
 #include <stack>
 #include <unordered_map>
 #include <utility>
@@ -201,20 +202,24 @@ Position make_move(Cell board[256], const Position curr_pos, const int robot_to_
     }
 }
 
+// Zero out every robot bit in the board.
+void clear_robot_bits(Cell board[256]) {
+    const int robot_bit_mask = 0b10000;
+    for (int i = 0; i < 256; i++) {
+        board[i].cell &= ~robot_bit_mask;
+    }
+}
+
 // Populate the robot-bit in the board variable using the current Position.
 // Leftmost 8 bits of curr_pos = earliest non-active robot.
 // Next 8 bits of curr_pos = next non-active robot.
 // Next 8 bits of curr_pos = next non-active robot.
 // Final 8 bits of curr_pos = active robot.
 void populate_robot_bits(Cell board[256], const Position curr_pos) {
+    clear_robot_bits(board);
+
     const int robot_bit_mask = 0b10000;
-
-    // First, zero out every robot bit in the board.
-    for (int i = 0; i < 256; i++) {
-        board[i].cell &= ~robot_bit_mask;
-    }
-
-    // Then, populate the robot bits for each robot-occupied cell.
+    // Populate the robot bits for each robot-occupied cell.
     board[(curr_pos & 0xff000000) >> 24].cell |= robot_bit_mask;
     board[(curr_pos & 0x00ff0000) >> 16].cell |= robot_bit_mask;
     board[(curr_pos & 0x0000ff00) >> 8].cell |= robot_bit_mask;
@@ -225,6 +230,7 @@ bool search_with_depth(Cell board[256], const Position start_pos, const int prec
     // Stack consists of (Position, moves_left)
     std::stack<std::pair<Position, int>> stack;
     stack.push(std::make_pair(start_pos, depth));
+    std::set<Position> seen;
 
     while (!stack.empty()) {
         std::pair<Position, int> current = stack.top();
@@ -233,60 +239,63 @@ bool search_with_depth(Cell board[256], const Position start_pos, const int prec
         const Position curr_pos = std::get<0>(current);
         const int moves_left = std::get<1>(current);
 
-        // print_position(curr_pos);
-        // std::cout << std::endl;
+        // Success check.
+        if (active_robot_cell(curr_pos) == goal) {
+            move_stack_to_vector(&stack, result);
+            clear_robot_bits(board); // Not strictly necessary, but it's good hygiene.
+            return true;
+        }
 
-        if (moves_left < precomputed_map[active_robot_cell(curr_pos)]) {
-            // We can't get to the goal fast enough. This Position is a dead end.
-            // std::cout << "Ran out of moves" << std::endl;
+        // See if we have a new fastest path for reaching this Position.
+        const int moves_used = depth - moves_left;
+        const Position sorted_pos = sorted_position(curr_pos);
+        auto already_found = moves_required->find(sorted_pos);
+
+        // if (seen.find(sorted_pos) != seen.end() and sorted_pos == create_position(6,12,241,208)) {
+        //     std::cout << "seen pos before -> ";
+        //     print_position(sorted_pos);
+        //     std::cout << ". " << moves_used << ". ";
+        //     std::cout << moves_required->find(sorted_pos)->second << std::endl;
+        // }
+
+        if (not(already_found == moves_required->end() or moves_used < already_found->second)) {
             continue;
         }
 
+        (*moves_required)[sorted_pos] = moves_used;
+        seen.insert(sorted_pos);
+
+        // Begin processing the current position.
         populate_robot_bits(board, curr_pos);
-
-        // We didn't reach the goal, and we're out of moves.
-        if (moves_left == 0) {
-            std::cerr << "Error: Shouldn't be reached" << std::endl;
-            break;
-        }
-
-        const int moves_used = depth - moves_left;
 
         for (int robot = 0; robot < 4; robot++) {
             for (int direction = 0; direction < 4; direction++) {
                 // std::cout << "Making move for robot " << robot << " in direction " << direction << ". ";
                 const Position new_pos = make_move(board, curr_pos, robot, direction);
-                // std::cout << "New pos ";
                 // print_position(new_pos);
-                // std::cout << ". ";
+                // std::cout << std::endl;
 
                 if (new_pos == curr_pos) {
                     // std::cout << "Same as old pos." << std::endl;
                     continue;
                 }
+                // std::cout << " <- old. new -> ";
 
-                const Position sorted_pos = sorted_position(new_pos);
-                // std::cout << "Sorted pos ";
-                // print_position(sorted_pos);
-                // std::cout << std::endl;
-
-                auto already_found = moves_required->find(sorted_pos);
-                if (already_found == moves_required->end() or moves_used + 1 < already_found->second) {
-                    (*moves_required)[sorted_pos] = moves_used + 1;
-                    stack.push(std::make_pair(new_pos, moves_left - 1));
-
-                    // Victory check.
-                    if (robot == 3 && active_robot_cell(new_pos) == goal) {
-                        move_stack_to_vector(&stack, result);
-                        return true;
-                    }
+                // Not worth pushing this Position onto the stack if it's too far from the goal.
+                if (moves_left - 1 < precomputed_map[active_robot_cell(new_pos)]) {
+                    // We can't get to the goal fast enough. This Position is a dead end.
+                    continue;
                 }
+
+                // std::cout << "moves_left is now " << (moves_left - 1) << std::endl;
+                stack.push(std::make_pair(new_pos, moves_left - 1));
             }
         }
     }
 
     // Search failed, either because we ran out of moves or because there is no path to the goal.
     // TODO: is the second case even possible?
+    clear_robot_bits(board);
     return false;
 }
 
@@ -295,7 +304,7 @@ bool search(Cell board[256], const Position start, const int precomputed_map[256
     // Map Positions to the lowest number of moves required to reach them from the start Position.
     std::unordered_map<Position, int> moves_required;
 
-    int depth = 22;
+    int depth = 0;
     while (depth < 23) {
         std::cout << "Searching with depth = " << depth << std::endl;
         if (search_with_depth(board, start, precomputed_map, goal, depth, &moves_required, result)) {
